@@ -1,0 +1,13 @@
+{
+  "properties": [
+    {
+      "name": "server.tomcat.max-threads",
+      "type": "java.lang.String",
+      "description": "Description for server.tomcat.max-threads."
+    },
+    {
+      "name": "server.tomcat.min-spare-threads",
+      "type": "java.lang.String",
+      "description": "Description for server.tomcat.min-spare-threads."
+    }
+  ] }
