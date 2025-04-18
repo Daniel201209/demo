@@ -94,6 +94,11 @@
         <artifactId>pagehelper-spring-boot-starter</artifactId>
         <version>1.4.7</version> <!-- 您可以选择一个合适的版本，1.4.7 是一个较新的稳定版本 -->
     </dependency>
+        <dependency>
+            <groupId>jakarta.persistence</groupId>
+            <artifactId>jakarta.persistence-api</artifactId>
+            <version>3.1.0</version>
+        </dependency>
     </dependencies>
 
     <build>

@@ -18,8 +18,30 @@ public interface CooperationMapper {
     @Select("SELECT * FROM cooperation WHERE id = #{id} AND deleted = 0")
     Cooperation findById(@Param("id") Long id);
 
-    @Select("SELECT * FROM cooperation WHERE id = #{id}")
+    @Select("SELECT * FROM cooperation WHERE id = #{id}") // 用于检查原始状态，包括已删除的
     Cooperation findRawById(@Param("id") Long id);
+
+    /**
+     * 根据 ID 逻辑删除单个合作信息 (更新 deleted 标志)
+     * @param id 要删除的合作 ID
+     * @return 影响的行数 (通常为 1 或 0)
+     */
+    @Update("UPDATE cooperation SET deleted = 1, updated_at = CURRENT_TIMESTAMP WHERE id = #{id} AND deleted = 0")
+    int markAsDeleted(@Param("id") Long id);
+
+    /**
+     * 根据 ID 列表批量逻辑删除合作信息 (更新 deleted 标志)
+     * @param ids 要删除的合作 ID 列表
+     * @return 影响的行数
+     */
+    @Update("<script>" +
+            "UPDATE cooperation SET deleted = 1, updated_at = CURRENT_TIMESTAMP " +
+            "WHERE deleted = 0 AND id IN " + // 只更新未删除的记录
+            "<foreach item='id' collection='ids' open='(' separator=',' close=')'>" +
+            "#{id}" +
+            "</foreach>" +
+            "</script>")
+    int batchMarkAsDeleted(@Param("ids") List<Long> ids);
 
     @Update("UPDATE cooperation SET " +
             "cooperation_theme = #{cooperationTheme}, " +

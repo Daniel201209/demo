@@ -1,7 +1,11 @@
 package com.shm.demo.service;
 
-import com.shm.demo.dto.*; // 引入 DTO 包
+import com.shm.demo.dto.*; // 确保导入了 DTO
 import com.shm.demo.entity.Cooperation;
+// import javax.persistence.EntityNotFoundException; // 移除旧的导入
+import com.shm.demo.exception.ResourceNotFoundException; // 导入自定义异常
+
+import java.util.List;
 
 public interface CooperationService {
 
@@ -35,4 +39,16 @@ public interface CooperationService {
      * @return 包含符合条件的合作列表和分页信息的结果对象
      */
     PageResponse<CooperationListItemDTO> searchCooperations(SearchCooperationRequest request); // 新增搜索方法
+
+    /**
+     * 根据 ID 获取合作详细信息
+     * @param id 合作 ID
+     * @return 合作详细信息 DTO
+     * @throws ResourceNotFoundException 如果找不到对应的合作信息
+     */
+    CooperationDetailDTO getCooperationDetails(Long id) throws ResourceNotFoundException; // 修改抛出的异常类型
+
+    void deleteCooperation(Long id) throws ResourceNotFoundException;
+
+    void deleteCooperationsBatch(List<Long> ids) throws IllegalArgumentException;
 }

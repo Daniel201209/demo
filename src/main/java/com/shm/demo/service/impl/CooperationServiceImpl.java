@@ -1,12 +1,8 @@
 package com.shm.demo.service.impl;
 
-import com.shm.demo.dto.CooperationPersonnelRequest;
-import com.shm.demo.dto.CreateCooperationRequest;
-import com.shm.demo.dto.UpdateCooperationRequest; // 引入 Update DTO
-import com.shm.demo.dto.PaginationRequest;
-import com.shm.demo.dto.PageResponse;
-import com.shm.demo.dto.CooperationListItemDTO;
+import com.shm.demo.dto.*;
 import com.shm.demo.entity.*;
+import com.shm.demo.exception.ResourceNotFoundException;
 import com.shm.demo.mapper.CooperationMapper;
 import com.shm.demo.mapper.CooperationPersonnelMapper;
 import com.shm.demo.mapper.EnterpriseMapper;
@@ -18,10 +14,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.CollectionUtils; // 引入 CollectionUtils
 
-import com.shm.demo.dto.SearchCooperationRequest; // 引入 Search DTO
 import java.time.LocalDate;
 import java.util.*;
 import java.util.stream.Collectors;
+import java.util.Collections; // 可能需要导入 Collections
 
 @Service
 public class CooperationServiceImpl implements CooperationService {
@@ -350,4 +346,96 @@ public class CooperationServiceImpl implements CooperationService {
         // 4. 组装 PageResponse 对象
         return new PageResponse<>(content, page, size, totalElements, totalPages);
     }
+
+     // --- 新增 getCooperationDetails 方法实现 ---
+     @Override
+     public CooperationDetailDTO getCooperationDetails(Long id) throws ResourceNotFoundException {
+         // 1. 获取合作主体信息 (使用 findById，它应该只返回未删除的记录)
+         Cooperation cooperation = cooperationMapper.findById(id);
+         if (cooperation == null) { // findById 应该已经处理了 deleted=0，所以只需检查 null
+             // 使用自定义异常
+             throw new ResourceNotFoundException("Cooperation", "id", id);
+         }
+ 
+         // 2. 获取关联的合作人员详细信息列表
+         //    假设 cooperationPersonnelMapper.findDetailByCooperationId 返回了包含所需信息的 DTO 列表
+         List<CooperationPersonnelDetailDTO> personnelDetails = cooperationPersonnelMapper.findDetailByCooperationId(id);
+         if (personnelDetails == null) { // 处理 Mapper 可能返回 null 的情况
+             personnelDetails = Collections.emptyList();
+         }
+ 
+ 
+         // 3. 组装 CooperationDetailDTO
+         CooperationDetailDTO detailDTO = new CooperationDetailDTO();
+         detailDTO.setId(cooperation.getId());
+         detailDTO.setCooperationTheme(cooperation.getCooperationTheme());
+         detailDTO.setInitiatorRegion(cooperation.getInitiatorRegion());
+         detailDTO.setReceiverRegion(cooperation.getReceiverRegion());
+         detailDTO.setCooperationStartDate(cooperation.getCooperationStartDate());
+         detailDTO.setCooperationEndDate(cooperation.getCooperationEndDate());
+         detailDTO.setPersonnelCount(personnelDetails.size()); // 人员数量从列表大小获取
+         detailDTO.setPersonnelList(personnelDetails);
+ 
+         return detailDTO;
+     }
+     // --- 结束新增 getCooperationDetails 方法实现 ---
+
+    
+    // --- 新增 deleteCooperation 方法实现 ---
+    @Override
+    @Transactional // 保证原子性
+    public void deleteCooperation(Long id) throws ResourceNotFoundException {
+        // 1. 检查合作是否存在且未被删除
+        Cooperation existingCooperation = cooperationMapper.findRawById(id); // 使用 findRawById 检查原始状态
+        if (existingCooperation == null) {
+            throw new ResourceNotFoundException("Cooperation", "id", id, "要删除的合作信息未找到");
+        }
+        if (existingCooperation.getDeleted() == 1) {
+            // 可以选择静默处理或抛出异常，这里选择抛出异常
+            throw new ResourceNotFoundException("Cooperation", "id", id, "合作信息已被删除，无法重复删除");
+        }
+
+        // 2. 执行逻辑删除 (更新 cooperation 表的 deleted 标志位)
+        int updatedRows = cooperationMapper.markAsDeleted(id); // 调用 Mapper 更新 deleted 标志
+        if (updatedRows == 0) {
+            // 理论上前面的检查已经覆盖，但这可以捕获并发删除的情况
+            throw new IllegalStateException("删除合作信息时发生并发冲突或记录状态已改变，ID: " + id);
+        }
+
+        // 3. 删除关联的 cooperation_personnel 记录 (如果未设置级联删除)
+        // 假设没有级联删除，需要手动删除
+        cooperationPersonnelMapper.deleteByCooperationId(id);
+    }
+    // --- 结束新增 deleteCooperation 方法实现 ---
+
+
+    // --- 新增 deleteCooperationsBatch 方法实现 ---
+    @Override
+    @Transactional // 保证原子性
+    public void deleteCooperationsBatch(List<Long> ids) throws IllegalArgumentException {
+        // 1. 校验 ID 列表
+        if (CollectionUtils.isEmpty(ids)) {
+            throw new IllegalArgumentException("用于批量删除的ID列表不能为空");
+        }
+
+        // 2. 执行批量逻辑删除 (更新 cooperation 表的 deleted 标志)
+        // Mapper 的批量更新语句应设计为只更新存在且 deleted=0 的记录。
+        int updatedRows = cooperationMapper.batchMarkAsDeleted(ids); // 调用 Mapper 批量更新 deleted 标志
+
+        // 可选：检查影响的行数
+        if (updatedRows == 0 && !ids.isEmpty()) {
+             // 可以选择抛出异常或记录警告，取决于业务需求
+             System.out.println("警告：批量删除合作信息操作未更新任何记录，提供的ID可能均不存在或已被删除。"); // 或使用日志
+        } else {
+             System.out.println("批量删除合作信息：成功更新 " + updatedRows + " 条记录。"); // 或使用日志
+        }
+
+
+        // 3. 批量删除关联的 cooperation_personnel 记录 (如果未设置级联删除)
+        // 假设没有级联删除，需要手动批量删除
+        if (updatedRows > 0) { // 只有在主表有记录被删除时才需要删除关联记录
+             cooperationPersonnelMapper.deleteByCooperationIds(ids); // 需要新增此 Mapper 方法
+        }
+    }
+    // --- 结束新增 deleteCooperationsBatch 方法实现 ---
 }
