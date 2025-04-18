@@ -18,6 +18,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.CollectionUtils; // 引入 CollectionUtils
 
+import com.shm.demo.dto.SearchCooperationRequest; // 引入 Search DTO
 import java.time.LocalDate;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -316,6 +317,35 @@ public class CooperationServiceImpl implements CooperationService {
              totalPages = 1;
         }
 
+
+        // 4. 组装 PageResponse 对象
+        return new PageResponse<>(content, page, size, totalElements, totalPages);
+    }
+
+    // --- 新增 searchCooperations 方法 ---
+    @Override
+    public PageResponse<CooperationListItemDTO> searchCooperations(SearchCooperationRequest request) {
+        int page = request.getPage();
+        int size = request.getSize();
+        int offset = (page - 1) * size;
+
+        // 1. 查询符合条件的总记录数
+        long totalElements = cooperationMapper.countTotalSearch(request);
+
+        List<CooperationListItemDTO> content;
+        if (totalElements == 0 || offset >= totalElements) {
+            // 如果没有数据或请求的页码超出范围，返回空列表
+            content = Collections.emptyList();
+        } else {
+            // 2. 查询当前页的数据 (Mapper 方法已包含人员数量计算和排序)
+            content = cooperationMapper.searchPaginatedWithCount(request, offset, size);
+        }
+
+        // 3. 计算总页数
+        int totalPages = (int) Math.ceil((double) totalElements / size);
+        if (totalPages == 0 && totalElements > 0) { // 至少有一页
+             totalPages = 1;
+        }
 
         // 4. 组装 PageResponse 对象
         return new PageResponse<>(content, page, size, totalElements, totalPages);

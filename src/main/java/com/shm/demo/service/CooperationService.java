@@ -27,7 +27,12 @@ public interface CooperationService {
      * @param paginationRequest 包含页码和每页数量的请求对象
      * @return 包含合作列表和分页信息的结果对象
      */
-    PageResponse<CooperationListItemDTO> listCooperations(PaginationRequest paginationRequest); // 新增方法
+    PageResponse<CooperationListItemDTO> listCooperations(PaginationRequest paginationRequest);
 
-    // 未来可能添加的方法: getCooperationById, searchCooperations, deleteCooperation 等
+    /**
+     * 根据条件搜索合作列表 (分页)
+     * @param request 包含搜索条件和分页信息的请求对象
+     * @return 包含符合条件的合作列表和分页信息的结果对象
+     */
+    PageResponse<CooperationListItemDTO> searchCooperations(SearchCooperationRequest request); // 新增搜索方法
 }

@@ -1,25 +1,24 @@
 package com.shm.demo.mapper;
 
+import com.shm.demo.dto.CooperationListItemDTO;
+import com.shm.demo.dto.SearchCooperationRequest;
 import com.shm.demo.entity.Cooperation;
-import com.shm.demo.dto.CooperationListItemDTO; // 引入 DTO
 import org.apache.ibatis.annotations.*;
-import java.util.List; // 引入 List
+
+import java.util.List;
 
 @Mapper
 public interface CooperationMapper {
 
-    @Insert("INSERT INTO cooperation(cooperation_theme, initiator_region, receiver_region, cooperation_start_date, cooperation_end_date) " +
-            "VALUES(#{cooperationTheme}, #{initiatorRegion}, #{receiverRegion}, #{cooperationStartDate}, #{cooperationEndDate})")
+    @Insert("INSERT INTO cooperation (cooperation_theme, initiator_region, receiver_region, cooperation_start_date, cooperation_end_date, deleted) " +
+            "VALUES (#{cooperationTheme}, #{initiatorRegion}, #{receiverRegion}, #{cooperationStartDate}, #{cooperationEndDate}, #{deleted})")
     @Options(useGeneratedKeys = true, keyProperty = "id")
     int insert(Cooperation cooperation);
-
-    @Select("SELECT COUNT(*) FROM cooperation WHERE cooperation_theme = #{theme} AND deleted = 0")
-    int countByTheme(@Param("theme") String theme);
 
     @Select("SELECT * FROM cooperation WHERE id = #{id} AND deleted = 0")
     Cooperation findById(@Param("id") Long id);
 
-    @Select("SELECT * FROM cooperation WHERE id = #{id}") // 查询原始记录，无论是否删除
+    @Select("SELECT * FROM cooperation WHERE id = #{id}")
     Cooperation findRawById(@Param("id") Long id);
 
     @Update("UPDATE cooperation SET " +
@@ -28,40 +27,96 @@ public interface CooperationMapper {
             "receiver_region = #{receiverRegion}, " +
             "cooperation_start_date = #{cooperationStartDate}, " +
             "cooperation_end_date = #{cooperationEndDate}, " +
-            "updated_at = CURRENT_TIMESTAMP " + // 通常更新时自动更新 updated_at
+            "updated_at = CURRENT_TIMESTAMP " +
             "WHERE id = #{id} AND deleted = 0")
     int update(Cooperation cooperation);
+
+    @Select("SELECT COUNT(*) FROM cooperation WHERE cooperation_theme = #{theme} AND deleted = 0")
+    int countByTheme(@Param("theme") String theme);
 
     @Select("SELECT COUNT(*) FROM cooperation WHERE cooperation_theme = #{theme} AND id != #{id} AND deleted = 0")
     int countByThemeAndNotId(@Param("theme") String theme, @Param("id") Long id);
 
-    /**
-     * 分页查询合作列表，并统计每个合作的人员数量
-     * 按创建时间降序排序
-     * @param offset 记录偏移量 (page - 1) * size
-     * @param size 每页数量
-     * @return 包含人员数量的合作列表项 DTO 列表
-     */
+    @Update("UPDATE cooperation SET deleted = 1, updated_at = CURRENT_TIMESTAMP WHERE id = #{id} AND deleted = 0")
+    int softDeleteById(@Param("id") Long id);
+
     @Select("SELECT " +
             "c.id, c.cooperation_theme, c.initiator_region, c.receiver_region, " +
             "c.cooperation_start_date, c.cooperation_end_date, c.created_at, " +
-            "COUNT(DISTINCT cp.id) AS personnel_count " + // 计算非重复人员明细数量
+            "COUNT(DISTINCT cp.id) AS personnel_count " +
             "FROM cooperation c " +
-            "LEFT JOIN cooperation_personnel cp ON c.id = cp.cooperation_id " + // 左连接以包含没有人员的合作
-            "WHERE c.deleted = 0 " + // 只查询未删除的
-            "GROUP BY c.id " + // 按合作 ID 分组
-            "ORDER BY c.created_at DESC " + // 按创建时间降序
+            "LEFT JOIN cooperation_personnel cp ON c.id = cp.cooperation_id " +
+            "WHERE c.deleted = 0 " +
+            "GROUP BY c.id " +
+            "ORDER BY c.created_at DESC " +
             "LIMIT #{size} OFFSET #{offset}")
     List<CooperationListItemDTO> findPaginatedWithCount(@Param("offset") int offset, @Param("size") int size);
 
-    /**
-     * 查询未删除的合作总数
-     * @return 总记录数
-     */
     @Select("SELECT COUNT(*) FROM cooperation WHERE deleted = 0")
     long countTotal();
 
-    // 可能需要的 softDelete 方法
-    @Update("UPDATE cooperation SET deleted = 1, updated_at = CURRENT_TIMESTAMP WHERE id = #{id} AND deleted = 0")
-    int softDeleteById(@Param("id") Long id);
+    // --- 新增搜索方法 ---
+
+   /**
+     * 根据搜索条件分页查询合作列表，并统计人员数量 (使用 @Select 和 <script>)
+     *
+     * @param request 搜索条件 DTO
+     * @param offset  记录偏移量
+     * @param size    每页数量
+     * @return 符合条件的合作列表项 DTO 列表
+     */
+    @Select("<script>" + // 使用 <script> 标签开启动态 SQL
+            "SELECT " +
+            "  c.id, c.cooperation_theme, c.initiator_region, c.receiver_region, " +
+            "  c.cooperation_start_date, c.cooperation_end_date, c.created_at, " +
+            "  COUNT(DISTINCT cp.id) AS personnel_count " +
+            "FROM cooperation c " +
+            "LEFT JOIN cooperation_personnel cp ON c.id = cp.cooperation_id " +
+            "WHERE c.deleted = 0 " +
+            // 动态添加 cooperation_theme 条件
+            "<if test='request.cooperationTheme != null and request.cooperationTheme != \"\"'>" +
+            "  AND c.cooperation_theme LIKE CONCAT('%', #{request.cooperationTheme}, '%') " +
+            "</if>" +
+            // 动态添加 initiator_region 条件
+            "<if test='request.initiatorRegion != null and request.initiatorRegion != \"\"'>" +
+            "  AND c.initiator_region = #{request.initiatorRegion} " +
+            "</if>" +
+            // 动态添加 receiver_region 条件
+            "<if test='request.receiverRegion != null and request.receiverRegion != \"\"'>" +
+            "  AND c.receiver_region = #{request.receiverRegion} " +
+            "</if>" +
+            "GROUP BY c.id " + // 添加 GROUP BY
+            "ORDER BY c.created_at DESC " + // 添加 ORDER BY
+            "LIMIT #{size} OFFSET #{offset}" + // 添加 LIMIT 和 OFFSET
+            "</script>") // 结束 <script> 标签
+    List<CooperationListItemDTO> searchPaginatedWithCount(
+            @Param("request") SearchCooperationRequest request, // 将整个 DTO 作为参数传递
+            @Param("offset") int offset,
+            @Param("size") int size);
+
+    /**
+     * 根据搜索条件查询合作总数 (使用 @Select 和 <script>)
+     *
+     * @param request 搜索条件 DTO
+     * @return 符合条件的总记录数
+     */
+    @Select("<script>" + // 使用 <script> 标签开启动态 SQL
+            "SELECT COUNT(*) " +
+            "FROM cooperation c " +
+            "WHERE c.deleted = 0 " +
+            // 动态添加 cooperation_theme 条件
+            "<if test='request.cooperationTheme != null and request.cooperationTheme != \"\"'>" + // 注意 test 条件中的引号和转义
+            "  AND c.cooperation_theme LIKE CONCAT('%', #{request.cooperationTheme}, '%') " +
+            "</if>" +
+            // 动态添加 initiator_region 条件
+            "<if test='request.initiatorRegion != null and request.initiatorRegion != \"\"'>" +
+            "  AND c.initiator_region = #{request.initiatorRegion} " +
+            "</if>" +
+            // 动态添加 receiver_region 条件
+            "<if test='request.receiverRegion != null and request.receiverRegion != \"\"'>" +
+            "  AND c.receiver_region = #{request.receiverRegion} " +
+            "</if>" +
+            "</script>")
+    // 结束 <script> 标签
+    long countTotalSearch(@Param("request") SearchCooperationRequest request); // 将整个 DTO 作为参数传递
 }

@@ -74,8 +74,25 @@ public class CooperationController {
     }
 
 
+    // --- 新增搜索合作信息接口 ---
+    /**
+     * 根据条件搜索合作信息列表 (分页)
+     * @param request 包含搜索条件 (cooperationTheme, initiatorRegion, receiverRegion) 和分页参数 (page, size) 的请求体
+     * @return 分页后的符合条件的合作信息列表
+     */
+    @PostMapping("/search") // 使用 POST 请求，将搜索条件放在请求体中
+    public ResponseEntity<?> searchCooperations(@Valid @RequestBody SearchCooperationRequest request) { // 接收搜索 DTO
+        try {
+            PageResponse<CooperationListItemDTO> pageResponse = cooperationService.searchCooperations(request);
+            return ResponseEntity.ok(pageResponse); // 返回 200 OK 和分页结果
+        } catch (Exception e) {
+            // log.error("Error searching cooperations", e); // 建议记录日志
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("搜索合作列表时发生内部错误");
+        }
+    }
+
+
     // --- 未来可能添加的接口 ---
     // GET /api/cooperations/{id} - 获取合作详情
-    // POST /api/cooperations/search - 搜索合作列表 (分页) - 可以替代 GET /list，增加过滤条件
     // DELETE /api/cooperations/{id} - 逻辑删除合作信息
 }
