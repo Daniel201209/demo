@@ -2,6 +2,8 @@ package com.shm.demo.entity;
 
 import lombok.Data;
 
+import javax.validation.constraints.NotNull;
+
 @Data
 public class Enterprise {
     private Long id;
